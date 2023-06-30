@@ -1,0 +1,12 @@
+# JetBrains
+.idea
+node_modules
+
+# Yarn Error Logs
+**/yarn-error.log
+
+
+# ts files
+*.tsbuildinfo
+zip
+dist

@@ -1,0 +1,37 @@
+{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "./../*": [
+        "*"
+      ]
+    },
+    "strict": false,
+    "allowJs": true,
+    "lib": [
+      "esnext",
+      "dom"
+    ],
+    "target": "es6",
+    "module": "es6",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "noImplicitAny": false,
+    "removeComments": true,
+    "preserveConstEnums": true,
+    "sourceMap": false,
+    "outDir": "dist",
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "incremental": true
+  },
+  "include": [
+    "**/*"
+  ],
+  "exclude": [
+    "src/**/*.spec.ts",
+    "node_modules",
+    "./dist/**/*"
+  ]
+}

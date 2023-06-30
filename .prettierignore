@@ -1,0 +1,48 @@
+# COPY OF `.gitignore` FILE with some additions
+
+# # # # # # # # # # # # # # #
+# Copy of `.gitignore` file #
+# # # # # # # # # # # # # # #
+
+# editor local configuration
+.nvimrc
+.vim
+.vscode
+.idea
+\.idea/
+knowt.sublime-project
+
+# next js
+.next
+.env*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# dependencies management
+/node_modules
+yarn-debug.log*
+yarn-error.log*
+
+# testing
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# build tools
+/coverage-ts
+.eslintcache
+debug\.log
+tsconfig.tsbuildinfo
+
+# misc
+.DS_Store
+
+
+# # # # # # # # # # # # # # # # # # #
+# prettier specific files to ignore #
+# # # # # # # # # # # # # # # # # # #
+
+/graphql
+/syncing/types/graphql.ts
