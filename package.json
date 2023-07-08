@@ -11,6 +11,9 @@
   "author": "raas",
   "license": "ISC",
   "dependencies": {
+    "@googlemaps/google-maps-services-js": "^3.3.32",
+    "@types/node": "^20.4.1",
     "prettier": "^2.8.8"
-  }
+  },
+  "type": "module"
 }
