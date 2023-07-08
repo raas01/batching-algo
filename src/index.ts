@@ -1,5 +1,5 @@
 import { Client, LatLngArray } from "@googlemaps/google-maps-services-js";
-import { getRandomSeconds, getRandomUnixTimestamp } from "./utils.js";
+import { getRandomSeconds, getRandomUnixTimestamp, getTime25MinutesAgo } from "./utils.js";
 
 type deliveryLocation = {
     coordinates: [number, number];
@@ -33,7 +33,7 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.73221793487148, -79.42894328403473],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 6,
         minPrep: 600,
     },
@@ -41,7 +41,7 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.73028765458277, -79.42518438573987],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 7,
         minPrep: 600,
     },
@@ -49,7 +49,7 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.72786827690832, -79.42073667195824],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 8,
         minPrep: 600,
     },
@@ -57,7 +57,7 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.72279390175652, -79.41568081824905],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 9,
         minPrep: 600,
     },
@@ -65,7 +65,7 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.72027950239434, -79.40789034608078],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 10,
         minPrep: 600,
     },
@@ -73,7 +73,7 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.72495464990148, -79.40743697006518],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 11,
         minPrep: 600,
     },
@@ -81,7 +81,7 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.73262080132046, -79.40221724948072],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 12,
         minPrep: 600,
     },
@@ -89,7 +89,7 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.72828967956287, -79.39989760943432],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 13,
         minPrep: 600,
     },
@@ -97,7 +97,7 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.72540986376909, -79.39532082240848],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 14,
         minPrep: 600,
     },
@@ -105,12 +105,11 @@ const deliveryLocations: deliveryLocation[] = [
         coordinates: [43.71869248685203, -79.39752658789466],
         orderTime: getRandomUnixTimestamp(),
         travelTime: getRandomSeconds(),
-        deliveryTime: getRandomSeconds(),
+        deliveryTime: 3000,
         locationId: 15,
         minPrep: 600,
     },
 ];
-
 const convertGPSToCartesianWRTCenter = ({ location, center }: { [key in "location" | "center"]: [number, number] }) => {
     //radius of earth in meters
     const R = 6371000;
@@ -154,7 +153,7 @@ const sortGroupsByTime = (groups: CardinalGroup): TimeSortedCardinalGroup => {
     //TODO:uncomment for prod
     // const currentTime = Math.floor(Date.now() / 1000);
 
-    const currentTime = getRandomUnixTimestamp();
+    const currentTime = getTime25MinutesAgo();
     // let sortedGroup:CardinalGroup|null = null
     let sortedGroups: TimeSortedCardinalGroup | {} = {};
     console.log(currentTime);
@@ -163,16 +162,23 @@ const sortGroupsByTime = (groups: CardinalGroup): TimeSortedCardinalGroup => {
         if (groups[Object.keys(groups)[i]]) {
             sortedGroups[Object.keys(groups)[i]] = groups[Object.keys(groups)[i]]
                 .sort((locationA, locationB) => {
-                    const timeA = locationA.orderTime + locationA.deliveryTime - (currentTime + locationA.travelTime);
-                    const timeB = locationB.orderTime + locationB.deliveryTime - (currentTime + locationB.travelTime);
-                    return timeA - timeB;
+                    const remainingTimeForLocationA =
+                        locationA.orderTime + locationA.deliveryTime - (currentTime + locationA.travelTime);
+                    const remainingTimeForLocationB =
+                        locationB.orderTime + locationB.deliveryTime - (currentTime + locationB.travelTime);
+                    return remainingTimeForLocationA - remainingTimeForLocationB;
                 })
-                .map(location => ({
-                    ...location,
-                    critical: currentTime + location.travelTime > location.orderTime + location.deliveryTime,
-                    timeRemaining: location.orderTime + location.deliveryTime - currentTime + location.travelTime ?? 0,
-                    direction: Object.keys(groups)[i],
-                }));
+                .map(location => {
+                    const timeRemaining =
+                        location.orderTime + location.deliveryTime - currentTime - location.travelTime;
+
+                    return {
+                        ...location,
+                        critical: currentTime + location.travelTime >= location.orderTime + location.deliveryTime,
+                        timeRemaining: timeRemaining,
+                        direction: Object.keys(groups)[i],
+                    };
+                });
         }
     }
 
@@ -226,7 +232,7 @@ const sortByWaypoints = async (groups: TimeSortedCardinalGroup, departureOrigin:
 const groupedLocation = groupLocationsByCardinalDirection(deliveryLocations, departureOrigin);
 
 const sortedGroups = sortGroupsByTime(groupedLocation);
-
+console.log(sortedGroups);
 sortByWaypoints(sortedGroups, departureOrigin).then(result => {
-    console.log(JSON.stringify(result));
+    console.log(result);
 });
