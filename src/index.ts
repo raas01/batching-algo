@@ -148,7 +148,7 @@ const sortByWaypoints = async (groups: TimeSortedCardinalGroup, departureOrigin:
 
         const locationsToWayPoint = deliveriesToWayPoint?.map(location => location.coordinates);
 
-        if (locationsToWayPoint?.length) {
+        if (locationsToWayPoint?.length>1) {
             try {
                 const wayPointResult = await client.directions({
                     params: {
