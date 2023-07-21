@@ -8,7 +8,8 @@
     "build": "rmdir /s /q dist && webpack --mode=production",
     "compress": "npm run build && node compress.js",
     "deploy": "aws lambda update-function-code --function-name batchLocationTest --zip-file fileb://batchingAlgo.zip",
-    "buildAndDeploy": "yarn compress && yarn deploy"
+    "check-profile": "node check-aws-profile.js",
+    "buildAndDeploy": "yarn compress && yarn check-profile && yarn deploy"
   },
   "keywords": [],
   "author": "raas",
@@ -19,6 +20,7 @@
     "@googlemaps/google-maps-services-js": "^3.3.32",
     "@types/node": "^20.4.1",
     "adm-zip": "^0.5.10",
+    "aws-sdk": "^2.1419.0",
     "babel-loader": "^9.1.3",
     "prettier": "^2.8.8",
     "ts-loader": "^9.4.4",
