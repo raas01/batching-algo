@@ -1,5 +1,5 @@
 import { Client, LatLngArray } from "@googlemaps/google-maps-services-js";
-import { getRandomSeconds, getRandomUnixTimestamp, getTime25MinutesAgo } from "./utils.js";
+import { getRandomSeconds, getRandomUnixTimestamp, getTime25MinutesAgo } from "./utils";
 
 type deliveryLocation = {
     coordinates: [number, number];
@@ -110,129 +110,134 @@ const deliveryLocations: deliveryLocation[] = [
         minPrep: 600,
     },
 ];
-const convertGPSToCartesianWRTCenter = ({ location, center }: { [key in "location" | "center"]: [number, number] }) => {
-    //radius of earth in meters
-    const R = 6371000;
 
-    //step 1: convert all coordinates to positive degrees
-    const centerPositive = center.map(angle => (angle < 0 ? angle + 360 : angle));
-    const locationPositive = location.map(angle => (angle < 0 ? angle + 360 : angle));
+export const handler = async (event: deliveryLocation[]) => {
+    const convertGPSToCartesianWRTCenter = ({
+        location,
+        center,
+    }: { [key in "location" | "center"]: [number, number] }) => {
+        //radius of earth in meters
+        const R = 6371000;
 
-    //step 2 : convert each to cartesian coordinates
-    const centerCartesian = centerPositive.map(angle => (angle * 2 * Math.PI * R) / 360);
-    const locationCartesian = locationPositive.map(angle => (angle * 2 * Math.PI * R) / 360);
+        //step 1: convert all coordinates to positive degrees
+        const centerPositive = center.map(angle => (angle < 0 ? angle + 360 : angle));
+        const locationPositive = location.map(angle => (angle < 0 ? angle + 360 : angle));
 
-    //step 3: find the difference between the two points
-    const latDiff = locationCartesian[0] - centerCartesian[0];
-    const lonDiff = locationCartesian[1] - centerCartesian[1];
+        //step 2 : convert each to cartesian coordinates
+        const centerCartesian = centerPositive.map(angle => (angle * 2 * Math.PI * R) / 360);
+        const locationCartesian = locationPositive.map(angle => (angle * 2 * Math.PI * R) / 360);
 
-    return { x: lonDiff / 1000, y: latDiff / 1000 };
-};
+        //step 3: find the difference between the two points
+        const latDiff = locationCartesian[0] - centerCartesian[0];
+        const lonDiff = locationCartesian[1] - centerCartesian[1];
 
-const groupLocationsByCardinalDirection = (locations: deliveryLocation[], center: [number, number]) => {
-    const groups: CardinalGroup = { NE: [], NW: [], SE: [], SW: [] };
+        return { x: lonDiff / 1000, y: latDiff / 1000 };
+    };
 
-    for (let location of locations) {
-        const { x, y } = convertGPSToCartesianWRTCenter({ location: location.coordinates, center });
+    const groupLocationsByCardinalDirection = (locations: deliveryLocation[], center: [number, number]) => {
+        const groups: CardinalGroup = { NE: [], NW: [], SE: [], SW: [] };
 
-        if (x >= 0 && y >= 0) {
-            groups.NE.push(location);
-        } else if (x >= 0 && y < 0) {
-            groups.SE.push(location);
-        } else if (x < 0 && y >= 0) {
-            groups.NW.push(location);
-        } else if (x < 0 && y < 0) {
-            groups.SW.push(location);
-        }
-    }
+        for (let location of locations) {
+            const { x, y } = convertGPSToCartesianWRTCenter({ location: location.coordinates, center });
 
-    return groups;
-};
-
-const sortGroupsByTime = (groups: CardinalGroup): TimeSortedCardinalGroup => {
-    //TODO:uncomment for prod
-    // const currentTime = Math.floor(Date.now() / 1000);
-
-    const currentTime = getTime25MinutesAgo();
-    // let sortedGroup:CardinalGroup|null = null
-    let sortedGroups: TimeSortedCardinalGroup | {} = {};
-    console.log(currentTime);
-    //    first sort items inside each group
-    for (let i = 0; i <= Object.keys(groups).length; i++) {
-        if (groups[Object.keys(groups)[i]]) {
-            sortedGroups[Object.keys(groups)[i]] = groups[Object.keys(groups)[i]]
-                .sort((locationA, locationB) => {
-                    const remainingTimeForLocationA =
-                        locationA.orderTime + locationA.deliveryTime - (currentTime + locationA.travelTime);
-                    const remainingTimeForLocationB =
-                        locationB.orderTime + locationB.deliveryTime - (currentTime + locationB.travelTime);
-                    return remainingTimeForLocationA - remainingTimeForLocationB;
-                })
-                .map(location => {
-                    const timeRemaining =
-                        location.orderTime + location.deliveryTime - currentTime - location.travelTime;
-
-                    return {
-                        ...location,
-                        critical: currentTime + location.travelTime >= location.orderTime + location.deliveryTime,
-                        timeRemaining: timeRemaining,
-                        direction: Object.keys(groups)[i],
-                    };
-                });
-        }
-    }
-
-    return sortedGroups as TimeSortedCardinalGroup;
-};
-
-const sortByWaypoints = async (groups: TimeSortedCardinalGroup, departureOrigin: LatLngArray) => {
-    const cardinalDirections = Object.keys(groups);
-    let sortedGroups: TimeSortedCardinalGroup | {} = {};
-    const client = new Client({});
-
-    for (let i = 0; i < cardinalDirections.length; i++) {
-        const criticalLocations = groups[cardinalDirections[i]]?.filter(location => location.critical) ?? [];
-        const wayPointDepartureOrigin = criticalLocations?.slice(-1)[0]?.coordinates ?? departureOrigin;
-
-        const deliveriesToWayPoint = groups[cardinalDirections[i]]?.filter(location => !location.critical);
-
-        const locationsToWayPoint = deliveriesToWayPoint?.map(location => location.coordinates);
-
-        if (locationsToWayPoint?.length > 1) {
-            try {
-                const wayPointResult = await client.directions({
-                    params: {
-                        //TODO: #security - remove api key for production
-                        key: "AIzaSyB2pmyvWdxGDeuGpK6oG_eGLmUjrFqTgGE",
-                        origin: wayPointDepartureOrigin,
-                        destination: departureOrigin,
-                        waypoints: locationsToWayPoint,
-                        optimize: true,
-                    },
-                });
-
-                const wayPointOrder = wayPointResult.data.routes[0].waypoint_order;
-
-                console.log("waypoints optimized -> ", cardinalDirections[i], wayPointOrder);
-                sortedGroups[cardinalDirections[i]] = criticalLocations.concat(
-                    wayPointOrder.map(index => deliveriesToWayPoint[index])
-                );
-            } catch (e) {
-                console.log("oops");
-                throw new Error(e);
+            if (x >= 0 && y >= 0) {
+                groups.NE.push(location);
+            } else if (x >= 0 && y < 0) {
+                groups.SE.push(location);
+            } else if (x < 0 && y >= 0) {
+                groups.NW.push(location);
+            } else if (x < 0 && y < 0) {
+                groups.SW.push(location);
             }
-        } else {
-            sortedGroups[cardinalDirections[i]] = groups[cardinalDirections[i]];
         }
-    }
 
-    return sortedGroups;
+        return groups;
+    };
+
+    const sortGroupsByTime = (groups: CardinalGroup): TimeSortedCardinalGroup => {
+        //TODO:uncomment for prod
+        // const currentTime = Math.floor(Date.now() / 1000);
+
+        const currentTime = getTime25MinutesAgo();
+        // let sortedGroup:CardinalGroup|null = null
+        let sortedGroups: TimeSortedCardinalGroup | {} = {};
+        //    first sort items inside each group
+        for (let i = 0; i <= Object.keys(groups).length; i++) {
+            if (groups[Object.keys(groups)[i]]) {
+                sortedGroups[Object.keys(groups)[i]] = groups[Object.keys(groups)[i]]
+                    .sort((locationA, locationB) => {
+                        const remainingTimeForLocationA =
+                            locationA.orderTime + locationA.deliveryTime - (currentTime + locationA.travelTime);
+                        const remainingTimeForLocationB =
+                            locationB.orderTime + locationB.deliveryTime - (currentTime + locationB.travelTime);
+                        return remainingTimeForLocationA - remainingTimeForLocationB;
+                    })
+                    .map(location => {
+                        const timeRemaining =
+                            location.orderTime + location.deliveryTime - currentTime - location.travelTime;
+
+                        return {
+                            ...location,
+                            critical: currentTime + location.travelTime >= location.orderTime + location.deliveryTime,
+                            timeRemaining: timeRemaining,
+                            direction: Object.keys(groups)[i],
+                        };
+                    });
+            }
+        }
+
+        return sortedGroups as TimeSortedCardinalGroup;
+    };
+
+    const sortByWaypoints = async (groups: TimeSortedCardinalGroup, departureOrigin: LatLngArray) => {
+        const cardinalDirections = Object.keys(groups);
+        let sortedGroups: TimeSortedCardinalGroup | {} = {};
+        const client = new Client({});
+
+        for (let i = 0; i < cardinalDirections.length; i++) {
+            const criticalLocations = groups[cardinalDirections[i]]?.filter(location => location.critical) ?? [];
+            const wayPointDepartureOrigin = criticalLocations?.slice(-1)[0]?.coordinates ?? departureOrigin;
+
+            const deliveriesToWayPoint = groups[cardinalDirections[i]]?.filter(location => !location.critical);
+
+            const locationsToWayPoint = deliveriesToWayPoint?.map(location => location.coordinates);
+
+            if (locationsToWayPoint?.length > 1) {
+                try {
+                    const wayPointResult = await client.directions({
+                        params: {
+                            //TODO: #security - remove api key for production
+                            key: "AIzaSyB2pmyvWdxGDeuGpK6oG_eGLmUjrFqTgGE",
+                            origin: wayPointDepartureOrigin,
+                            destination: departureOrigin,
+                            waypoints: locationsToWayPoint,
+                            optimize: true,
+                        },
+                    });
+
+                    const wayPointOrder = wayPointResult.data.routes[0].waypoint_order;
+
+                    console.log("waypoints optimized -> ", cardinalDirections[i], wayPointOrder);
+                    sortedGroups[cardinalDirections[i]] = criticalLocations.concat(
+                        wayPointOrder.map(index => deliveriesToWayPoint[index])
+                    );
+                } catch (e) {
+                    console.log("oops");
+                    throw new Error(e);
+                }
+            } else {
+                sortedGroups[cardinalDirections[i]] = groups[cardinalDirections[i]];
+            }
+        }
+
+        return sortedGroups;
+    };
+
+    const groupedLocation = groupLocationsByCardinalDirection(event, departureOrigin);
+
+    const sortedGroups = sortGroupsByTime(groupedLocation);
+
+    const batch = await sortByWaypoints(sortedGroups, departureOrigin)
+
+    return batch
 };
-
-const groupedLocation = groupLocationsByCardinalDirection(deliveryLocations, departureOrigin);
-
-const sortedGroups = sortGroupsByTime(groupedLocation);
-console.log(sortedGroups);
-sortByWaypoints(sortedGroups, departureOrigin).then(result => {
-    console.log(result);
-});
